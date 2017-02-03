@@ -140,7 +140,7 @@ char* getContentType (char* filename) {
     else if (strcmp(fileType, "gif") == 0) {
         contentType = "Content-Type: image/gif\n\n";
     }
-    else if (strcmp(fileType, "jpeg") == 0) {
+    else if (strcmp(fileType, "jpeg") == 0 || strcmp(fileType, "jpg") == 0) {
         contentType = "Content-Type: image/jpeg\n\n";
     }
     else {
@@ -239,7 +239,7 @@ void sendResponse (int sock, char* filename) {
     strcpy(contentLength, "Content-Length: ");
     strcat(contentLength, size);
     strcat(contentLength, "\n");
-    printf("%s\n", contentLength);
+    // printf("%s\n", contentLength);
 
     int bufferLength = strlen(status) + strlen(connection) + strlen(date)
                         + strlen(server) + strlen(lastModified) + strlen(contentLength)
