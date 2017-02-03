@@ -13,10 +13,16 @@
 #include <sys/wait.h>	/* for the waitpid() system call */
 #include <signal.h>	/* signal name macros, and the kill() prototype */
 
+#define BUFFER_SIZE 512
+
+#define STATUS_OK "200 OK"
+#define STATUS_NOT_FOUND "404 Not Found"
 
 void handleRequest(int); /* function prototype */
 char* getFileName(char*);
+char* getResponse(char*);
 char* getContentType(char*);
+char* getFile(char*);
 
 void sigchld_handler(int s)
 {
@@ -96,40 +102,145 @@ int main(int argc, char *argv[])
 void handleRequest (int sock)
 {
    int n;
-   int buffer_size = 512;
-   char buffer[buffer_size];
+   char buffer[BUFFER_SIZE];
 
-   bzero(buffer,buffer_size);
-   n = read(sock,buffer,buffer_size-1);
+   bzero(buffer,BUFFER_SIZE);
+   n = read(sock,buffer,BUFFER_SIZE-1);
    if (n < 0) error("ERROR reading from socket");
    printf("Here is the message:\n%s\n\n",buffer);
-   char* filename = getFileName(buffer);
 
+   // extract filename from buffer
+   char* filename = getFileName(buffer);
    if (strlen(filename) != 0) {
       printf("File requested: %s\n", filename);
    }
    else {
       printf("No file requested\n");
    }
+   char* response = getResponse(filename);
 
-   char* response = "HTTP/1.1 200 OK\n"
-                     "Connection: close\n"
-                     "Date: Tue, 09 Aug 2011 15:44:04 GMT\n"
-                     "Server: Apache/2.2.3 (CentOS)\n"
-                     "Last-Modified: Tue, 09 Aug 2011 15:11:03 GMT\n"
-                     "Content-Length: 44\n"
-                     "Content-Type: text/html\n\n"
-                     "<html><body><h1>Test Page</h1></body></html>";
-                     
    printf("Sending response:\n%s\n\n", response);
 
    n = write(sock,response,strlen(response));
    if (n < 0) error("ERROR writing to socket");
 }
 
+// extract filename from buffer
 char* getFileName (char* request) {
    char* line = strtok(request, "\n");
-   char* filename = strtok(line, "/");
+   char* filename = strtok(line, " ");
    filename = strtok(NULL, " ");
+   filename++;
    return filename;
+}
+
+char* getContentType (char* filename) {
+    char* fileType = strtok(filename, ".");
+    fileType = strtok(NULL, " ");
+
+    char* contentType;
+    if (strcmp(fileType, "html") == 0) {
+        contentType = "Content-Type: text/html\n\n";
+    }
+    else if (strcmp(fileType, "gif") == 0) {
+        contentType = "Content-Type: image/gif\n\n";
+    }
+    else if (strcmp(fileType, "jpeg") == 0) {
+        contentType = "Content-Type: image/jpeg\n\n";
+    }
+    else {
+        contentType = STATUS_NOT_FOUND;
+    }
+    return contentType;
+}
+
+char* getFile(char* filename) {
+    char* buffer;
+    FILE *fp;
+    int fileSize;
+
+    fp = fopen(filename, "r");
+    if (fp == NULL) {
+        return STATUS_NOT_FOUND;
+    }
+
+    /* Get the number of bytes */
+    fseek(fp, 0, SEEK_END);
+    fileSize = ftell(fp);
+
+    /* reset the file position indicator to the beginning of the file */
+    fseek(fp, 0, SEEK_SET);
+
+    buffer = malloc(sizeof(char)*fileSize);
+    // copy file into buffer
+    fread(buffer, sizeof(char), fileSize, fp);
+    fclose(fp);
+    return buffer;
+}
+
+// takes filename and generates response
+char* getResponse (char* filename) {
+
+    char* errorNotFoundResponse = "HTTP/1.1 404 Not Found\n\n"
+                    "<html><body><h1>404 Not Found</h1></body></html>";
+    char* errorNotSupported = "HTTP/1.1 404 Not Found\n\n"
+                    "<html><body><h1>Content Type Not Supported</h1></body></html>";
+
+    char* file = getFile(filename);
+    // printf("%s\n", file);
+    char size[16];
+    sprintf(size, "%lu", strlen(file));
+
+    // check if found, if not found, then return not found
+    char *connection, *status, *contentType, *date, *server, *lastModified;
+    if (strcmp(file, STATUS_NOT_FOUND) == 0) {
+        return errorNotFoundResponse;
+    }
+    else {    // if found, set status to ok for now
+        status = "HTTP/1.1 200 OK\n";
+    }
+
+    // set content type to the proper one
+    contentType = getContentType(filename);
+    // printf("%s\n", contentType);
+
+    // send not found response if not proper content type
+    if (strcmp(contentType, STATUS_NOT_FOUND) == 0) {
+        return errorNotSupported;
+    }
+
+    // check status and set appropriate body
+    connection = "Connection: close\n";
+    date = "Date: Tue, 09 Aug 2011 15:44:04 GMT\n";
+    server = "Server: Apache/2.2.3 (CentOS)\n";
+    lastModified = "Last-Modified: Tue, 09 Aug 2011 15:11:03 GMT\n";
+    char* contentLength = malloc(50);
+    strcpy(contentLength, "Content-Length: ");
+    strcat(contentLength, size);
+    strcat(contentLength, "\n");
+    printf("%s\n", contentLength);
+
+    int bufferLength = strlen(status) + strlen(connection) + strlen(date)
+                        + strlen(server) + strlen(lastModified) + strlen(contentLength)
+                        + strlen(contentType) + strlen(file);
+    char* response = malloc(bufferLength);
+    strcat(response, status);
+    strcat(response, connection);
+    strcat(response, date);
+    strcat(response, server);
+    strcat(response, lastModified);
+    strcat(response, contentLength);
+    strcat(response, contentType);
+    strcat(response, file);
+
+    // char* okResponse = "HTTP/1.1 200 OK\n"
+    //                  "Connection: close\n"
+    //                  "Date: Tue, 09 Aug 2011 15:44:04 GMT\n"
+    //                  "Server: Apache/2.2.3 (CentOS)\n"
+    //                  "Last-Modified: Tue, 09 Aug 2011 15:11:03 GMT\n"
+    //                  "Content-Length: 44\n"
+    //                  "Content-Type: text/html\n\n"
+    //                  "<html><body><h1>Test Page</h1></body></html>";
+
+    return response;
 }
