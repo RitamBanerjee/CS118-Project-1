@@ -14,12 +14,15 @@
 #include <signal.h>	/* signal name macros, and the kill() prototype */
 
 
+void handleRequest(int); /* function prototype */
+char* getFileName(char*);
+char* getContentType(char*);
+
 void sigchld_handler(int s)
 {
     while(waitpid(-1, NULL, WNOHANG) > 0);
 }
 
-void dostuff(int); /* function prototype */
 void error(char *msg)
 {
     perror(msg);
@@ -76,7 +79,7 @@ int main(int argc, char *argv[])
 
          if (pid == 0)  { // fork() returns a value of 0 to the child process
              close(sockfd);
-             dostuff(newsockfd);
+             handleRequest(newsockfd);
              exit(0);
          }
          else //returns the process ID of the child process to the parent
@@ -85,12 +88,12 @@ int main(int argc, char *argv[])
      return 0; /* we never get here */
 }
 
-/******** DOSTUFF() *********************
+/******** handleRequest() *********************
  There is a separate instance of this function
  for each connection.  It handles all communication
  once a connnection has been established.
  *****************************************/
-void dostuff (int sock)
+void handleRequest (int sock)
 {
    int n;
    int buffer_size = 512;
@@ -99,7 +102,34 @@ void dostuff (int sock)
    bzero(buffer,buffer_size);
    n = read(sock,buffer,buffer_size-1);
    if (n < 0) error("ERROR reading from socket");
-   printf("Here is the message: %s\n",buffer);
-   n = write(sock,"I got your message",18);
+   printf("Here is the message:\n%s\n\n",buffer);
+   char* filename = getFileName(buffer);
+
+   if (strlen(filename) != 0) {
+      printf("File requested: %s\n", filename);
+   }
+   else {
+      printf("No file requested\n");
+   }
+
+   char* response = "HTTP/1.1 200 OK\n"
+                     "Connection: close\n"
+                     "Date: Tue, 09 Aug 2011 15:44:04 GMT\n"
+                     "Server: Apache/2.2.3 (CentOS)\n"
+                     "Last-Modified: Tue, 09 Aug 2011 15:11:03 GMT\n"
+                     "Content-Length: 44\n"
+                     "Content-Type: text/html\n\n"
+                     "<html><body><h1>Test Page</h1></body></html>";
+                     
+   printf("Sending response:\n%s\n\n", response);
+
+   n = write(sock,response,strlen(response));
    if (n < 0) error("ERROR writing to socket");
+}
+
+char* getFileName (char* request) {
+   char* line = strtok(request, "\n");
+   char* filename = strtok(line, "/");
+   filename = strtok(NULL, " ");
+   return filename;
 }
