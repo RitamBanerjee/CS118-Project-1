@@ -20,7 +20,7 @@
 
 void handleRequest(int); /* function prototype */
 char* getFileName(char*);
-char* getResponse(char*);
+void sendResponse(int, char*);
 char* getContentType(char*);
 char* getFile(char*);
 
@@ -117,12 +117,7 @@ void handleRequest (int sock)
    else {
       printf("No file requested\n");
    }
-   char* response = getResponse(filename);
-
-   printf("Sending response:\n%s\n\n", response);
-
-   n = write(sock,response,strlen(response));
-   if (n < 0) error("ERROR writing to socket");
+   sendResponse(sock, filename);
 }
 
 // extract filename from buffer
@@ -159,7 +154,7 @@ char* getFile(char* filename) {
     FILE *fp;
     int fileSize;
 
-    fp = fopen(filename, "r");
+    fp = fopen(filename, "rb");
     if (fp == NULL) {
         return STATUS_NOT_FOUND;
     }
@@ -178,8 +173,25 @@ char* getFile(char* filename) {
     return buffer;
 }
 
+size_t getFileSize(const char *filename) {
+    char* buffer;
+    FILE *fp;
+    int fileSize;
+
+    fp = fopen(filename, "rb");
+    if (fp == NULL) {
+        return 0;
+    }
+
+    /* Get the number of bytes */
+    fseek(fp, 0, SEEK_END);
+    fileSize = ftell(fp);
+
+    return fileSize;
+}
+
 // takes filename and generates response
-char* getResponse (char* filename) {
+void sendResponse (int sock, char* filename) {
 
     char* errorNotFoundResponse = "HTTP/1.1 404 Not Found\n\n"
                     "<html><body><h1>404 Not Found</h1></body></html>";
@@ -188,13 +200,18 @@ char* getResponse (char* filename) {
 
     char* file = getFile(filename);
     // printf("%s\n", file);
+    size_t fileSize = getFileSize(filename);
     char size[16];
-    sprintf(size, "%lu", strlen(file));
+    sprintf(size, "%zu", fileSize);
 
     // check if found, if not found, then return not found
     char *connection, *status, *contentType, *date, *server, *lastModified;
     if (strcmp(file, STATUS_NOT_FOUND) == 0) {
-        return errorNotFoundResponse;
+        int n = send(sock,errorNotFoundResponse,strlen(errorNotFoundResponse),0);
+        if (n < 0) {
+            error("ERROR writing to socket");
+        }
+        return;
     }
     else {    // if found, set status to ok for now
         status = "HTTP/1.1 200 OK\n";
@@ -206,7 +223,11 @@ char* getResponse (char* filename) {
 
     // send not found response if not proper content type
     if (strcmp(contentType, STATUS_NOT_FOUND) == 0) {
-        return errorNotSupported;
+        int n = send(sock,errorNotSupported,strlen(errorNotSupported),0);
+        if (n < 0) {
+            error("ERROR writing to socket");
+        }
+        return;
     }
 
     // check status and set appropriate body
@@ -222,7 +243,7 @@ char* getResponse (char* filename) {
 
     int bufferLength = strlen(status) + strlen(connection) + strlen(date)
                         + strlen(server) + strlen(lastModified) + strlen(contentLength)
-                        + strlen(contentType) + strlen(file);
+                        + strlen(contentType);
     char* response = malloc(bufferLength);
     strcat(response, status);
     strcat(response, connection);
@@ -231,7 +252,6 @@ char* getResponse (char* filename) {
     strcat(response, lastModified);
     strcat(response, contentLength);
     strcat(response, contentType);
-    strcat(response, file);
 
     // char* okResponse = "HTTP/1.1 200 OK\n"
     //                  "Connection: close\n"
@@ -242,5 +262,17 @@ char* getResponse (char* filename) {
     //                  "Content-Type: text/html\n\n"
     //                  "<html><body><h1>Test Page</h1></body></html>";
 
-    return response;
+    printf("Sending response:\n%s\n\n", response);
+
+    int n = send(sock,response,strlen(response),0);
+
+    if (n < 0) {
+        error("ERROR writing to socket");
+    }
+
+    n = send(sock,file,fileSize,0);
+
+    if (n < 0) {
+        error("ERROR writing to socket");
+    }
 }
