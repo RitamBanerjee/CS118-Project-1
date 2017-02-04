@@ -1,1 +1,3 @@
-Let me know if you figure out how to install git on the virtual box
+# CS118 - Project 1
+Ritam Banerjee 604258719
+Bryan Tran 404476695
