@@ -23,6 +23,7 @@ char* getFileName(char*);
 void sendResponse(int, char*);
 char* getContentType(char*);
 char* getFile(char*);
+size_t getFileSize(char*);
 
 void sigchld_handler(int s)
 {
@@ -125,17 +126,23 @@ void handleRequest (int sock)
 
 // extract filename from buffer
 char* getFileName (char* request) {
+    // get the first line
    char* line = strtok(request, "\n");
+
+   // get the filename from the first line
    char* filename = strtok(line, " ");
    filename = strtok(NULL, " ");
    filename++;
    return filename;
 }
 
+// extract content-type from the filename
 char* getContentType (char* filename) {
+    // get filetype from the filename
     char* fileType = strtok(filename, ".");
     fileType = strtok(NULL, " ");
 
+    // read filetype and assign content-type to it
     char* contentType;
     if (strcmp(fileType, "html") == 0) {
         contentType = "Content-Type: text/html\n\n";
@@ -152,11 +159,13 @@ char* getContentType (char* filename) {
     return contentType;
 }
 
+// retrieve file from the system
 char* getFile(char* filename) {
     char* buffer;
     FILE *fp;
     int fileSize;
 
+    // open the file
     fp = fopen(filename, "rb");
     if (fp == NULL) {
         return STATUS_NOT_FOUND;
@@ -170,13 +179,17 @@ char* getFile(char* filename) {
     fseek(fp, 0, SEEK_SET);
 
     buffer = malloc(sizeof(char)*fileSize);
+
     // copy file into buffer
     fread(buffer, sizeof(char), fileSize, fp);
     fclose(fp);
     return buffer;
 }
 
-size_t getFileSize(const char *filename) {
+// get filesize of file
+size_t getFileSize(char *filename) {
+
+    // similar to the above, but returning the filesize instead of the actual file
     char* buffer;
     FILE *fp;
     int fileSize;
@@ -189,18 +202,25 @@ size_t getFileSize(const char *filename) {
     /* Get the number of bytes */
     fseek(fp, 0, SEEK_END);
     fileSize = ftell(fp);
-
+    fclose(fp);
     return fileSize;
 }
 
 // takes filename and generates response
 void sendResponse (int sock, char* filename) {
 
+    // initializing variables so we can just return them if they came up
+    // in thise case we are just going to return 404 for both cases of not
+    // found and unsupported file type
     char* errorNotFoundResponse = "HTTP/1.1 404 Not Found\n\n"
                     "<html><body><h1>404 Not Found</h1></body></html>";
     char* errorNotSupported = "HTTP/1.1 404 Not Found\n\n"
                     "<html><body><h1>Content Type Not Supported</h1></body></html>";
 
+    // declaring necessary variables for the reponse header
+    char *connection, *status, *contentType, *date, *server, *lastModified;
+
+    // getting file and filesize based on filename
     char* file = getFile(filename);
     // printf("%s\n", file);
     size_t fileSize = getFileSize(filename);
@@ -208,7 +228,6 @@ void sendResponse (int sock, char* filename) {
     sprintf(size, "%zu", fileSize);
 
     // check if found, if not found, then return not found
-    char *connection, *status, *contentType, *date, *server, *lastModified;
     if (strcmp(file, STATUS_NOT_FOUND) == 0) {
         int n = send(sock,errorNotFoundResponse,strlen(errorNotFoundResponse),0);
         if (n < 0) {
@@ -233,7 +252,7 @@ void sendResponse (int sock, char* filename) {
         return;
     }
 
-    // check status and set appropriate body
+    // set appropriate headers
     connection = "Connection: close\n";
     date = "Date: Tue, 09 Aug 2011 15:44:04 GMT\n";
     server = "Server: Apache/2.2.3 (CentOS)\n";
