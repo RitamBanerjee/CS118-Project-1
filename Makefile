@@ -7,7 +7,7 @@ OBJ = webserver.o
 	$(CC) -c -o  $@ $< $(CFLAGS)
 
 webserver: $(OBJ)
-	$(CC) -o -g  $@ $^ $(CFLAGS)
+	$(CC) -o $@ $^ $(CFLAGS)
 
-clean: 
+clean:
 	\rm -f *.o webserver

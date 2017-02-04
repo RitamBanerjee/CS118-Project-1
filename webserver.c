@@ -115,9 +115,10 @@ void handleRequest (int sock)
       printf("File requested: %s\n", filename);
    }
    else {
-    //   filename = "test.html";
-    //   printf("No file requested, using: %s\n", filename);
-    printf("No file requested\n");
+      filename = malloc(strlen("index.html")+1);
+      strcpy(filename, "index.html");
+      printf("No file requested, using: %s\n", filename);
+    // printf("No file requested\n");
    }
    sendResponse(sock, filename);
 }
@@ -201,7 +202,7 @@ void sendResponse (int sock, char* filename) {
                     "<html><body><h1>Content Type Not Supported</h1></body></html>";
 
     char* file = getFile(filename);
-    printf("%s\n", file);
+    // printf("%s\n", file);
     size_t fileSize = getFileSize(filename);
     char size[16];
     sprintf(size, "%zu", fileSize);
