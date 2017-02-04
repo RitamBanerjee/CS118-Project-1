@@ -111,6 +111,9 @@ void handleRequest (int sock)
 
    // extract filename from buffer
    char* filename = getFileName(buffer);
+   if(strlen(filename)==0){
+        filename = "test.html";
+   }
    if (strlen(filename) != 0) {
       printf("File requested: %s\n", filename);
    }
@@ -130,8 +133,11 @@ char* getFileName (char* request) {
 }
 
 char* getContentType (char* filename) {
+    printf("in content type:%s\n",filename);
     char* fileType = strtok(filename, ".");
+    printf("intermediat: %s\n:", fileType);
     fileType = strtok(NULL, " ");
+    printf("filetype: %s\n",fileType);
 
     char* contentType;
     if (strcmp(fileType, "html") == 0) {
@@ -199,9 +205,10 @@ void sendResponse (int sock, char* filename) {
                     "<html><body><h1>Content Type Not Supported</h1></body></html>";
 
     char* file = getFile(filename);
-    // printf("%s\n", file);
+    printf("%s\n", file);
     size_t fileSize = getFileSize(filename);
     char size[16];
+    printf("size: %s\n",size);
     sprintf(size, "%zu", fileSize);
 
     // check if found, if not found, then return not found
@@ -209,17 +216,19 @@ void sendResponse (int sock, char* filename) {
     if (strcmp(file, STATUS_NOT_FOUND) == 0) {
         int n = send(sock,errorNotFoundResponse,strlen(errorNotFoundResponse),0);
         if (n < 0) {
+            printf("error writing\n");
             error("ERROR writing to socket");
         }
         return;
     }
     else {    // if found, set status to ok for now
+        printf("socket written to\n");
         status = "HTTP/1.1 200 OK\n";
     }
 
     // set content type to the proper one
     contentType = getContentType(filename);
-    // printf("%s\n", contentType);
+    printf("%s\n", contentType);
 
     // send not found response if not proper content type
     if (strcmp(contentType, STATUS_NOT_FOUND) == 0) {
@@ -239,7 +248,7 @@ void sendResponse (int sock, char* filename) {
     strcpy(contentLength, "Content-Length: ");
     strcat(contentLength, size);
     strcat(contentLength, "\n");
-    // printf("%s\n", contentLength);
+    printf("%s\n", contentLength);
 
     int bufferLength = strlen(status) + strlen(connection) + strlen(date)
                         + strlen(server) + strlen(lastModified) + strlen(contentLength)
